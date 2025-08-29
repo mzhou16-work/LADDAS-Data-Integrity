@@ -1,0 +1,12 @@
+# Ignore all Jupyter notebooks
+*.ipynb
+
+# Ignore the INFOR directory and its contents
+INFOR/
+
+# Optional: other common ignores
+__pycache__/
+*.pyc
+*.log
+.env
+Then add the ignore 
