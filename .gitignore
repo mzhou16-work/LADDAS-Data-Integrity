@@ -9,4 +9,5 @@ __pycache__/
 *.pyc
 *.log
 .env
+.cvs
 Then add the ignore 
