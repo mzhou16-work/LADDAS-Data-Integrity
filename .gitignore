@@ -9,5 +9,5 @@ __pycache__/
 *.pyc
 *.log
 .env
-.cvs
+.csv
 Then add the ignore 

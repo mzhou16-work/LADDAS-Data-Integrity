@@ -1,162 +1,176 @@
-# LAADS File Downloader
+# LAADS Data Integration
 
-This package automates downloading missing or corrupted files from **NASA LAADS DAAC**, using daily metadata files ('INFOR' CSVs) and integrity checks ('md5sum' or 'size'). It supports single-day and date-range downloads, with configuration via YAML.
+Utilities to index, verify, download, compare, and visualize NASA LAADS DAAC products using daily metadata (“INFOR” CSVs). Includes integrity checks and daily-by-month coverage plots.
 
 ---
 
 ## Repository Structure
 
 ```
-├── config.yaml             # User configuration (token, data directories, verify mode)
-├── laddas_root.yaml        # Root URLs for products (per collection/product mapping)
-├── download_missing.py     # Main downloader script (uses INFOR CSV + wget)
-├── get_file_information.py # Script to query LAADS and generate INFOR CSV metadata
-└── README.md               # This file
+├── README.md
+├── config.yaml                   # User config (infor_root, data_root, token, verify)
+├── laddas_root.yaml              # Product → root URL mapping (per collection)
+├── get_file_information.py       # Generate INFOR/<product>/<YYYY>/<YYYY-MM-DD>.csv
+├── download_missing.py           # Download missing/corrupted files (wget + token; supports --output_dir)
+├── compare_infor_vs_data.py      # Compare INFOR vs local files; list missing (with downloadsLink)
+├── check_missing_overpasses.py   # Check missing HHMM granules per day (VIIRS 6-min / MODIS 5-min)
+└── visualize_monthly_missing.py  # Daily bars arranged by month; highlight missing days
 ```
 
 ---
 
-## Installation
+## 🔧 Installation
 
 Create a minimal environment:
 
-'''bash
-conda create -n laads python=3.10 pandas pyyaml
+```bash
+conda create -n laads python=3.10 pandas pyyaml matplotlib
 conda activate laads
-# optional: pip install requests
-'''
+# or: pip install pandas pyyaml matplotlib
+```
 
-You can also use `pip install pandas pyyaml` in an existing environment.
+Python 3.7+ is supported; 3.10+ recommended.
 
 ---
 
-## Configuration
+## ⚙️ Configuration
 
 ### `config.yaml`
 
-Defines global defaults so command lines can stay simple:
+Defines global defaults so command lines stay simple:
 
 ```yaml
-infor_root: "./INFOR"      # where YYYY-MM-DD.csv metadata lives
-data_root: "/path/to/DATA" # where product files will be downloaded
+infor_root: "./INFOR"         # where per-day YYYY-MM-DD.csv metadata live
+data_root: "/path/to/DATA"    # where product files are stored as <product>/<YYYY>/<DOY>/
 token: "YOUR_EARTHDATA_TOKEN"
-verify: "auto"             # 'auto' | 'md5' | 'size' | 'none'
+verify: "auto"                # 'auto' | 'md5' | 'size' | 'none'
 ```
 
-#### `token`
+- `token`: Create at https://urs.earthdata.nasa.gov  
+  You can also set it via environment variable `NASA_EARTHDATA_TOKEN`.
+- `verify` options:
+  - `md5`: strict (slowest, most accurate)
+  - `size`: fast size-only check
+  - `auto`: use md5 if available, else size (default)
+  - `none`: skip all integrity checks
 
-- NASA Earthdata Bearer token (create at [https://urs.earthdata.nasa.gov](https://urs.earthdata.nasa.gov))
-- Can also be set via environment variable `NASA_EARTHDATA_TOKEN`
-
-#### `verify` (integrity check mode)
-
-- `md5` → strict check with MD5 hash (**slowest, most accurate**)
-- `size` → fast check using file size only (**less strict**)
-- `auto` → use MD5 if available, else size (**default**)
-- `none` → skip integrity checks
-
-> **Security tip**: Prefer using the `NASA_EARTHDATA_TOKEN` environment variable over storing tokens in plain text.
+🔒 **Security Tip:** Prefer setting `NASA_EARTHDATA_TOKEN` as an environment variable over storing in plain text.
 
 ---
 
-### `laddas_root.yaml`
-
-Defines product → root URL mapping (per collection). Example:
-
-'''yaml
-products:
-  VNP14IMG: "https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/5000/VNP14IMG/"
-  VJ103IMG: "https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/5200/VJ103IMG/"
-'''
-
----
-
-## Usage
+## 🚀 Usage
 
 ### 1. Generate daily metadata (INFOR CSVs)
-
-Create per-day CSV inventories (file names, sizes, md5, download links):
 
 ```bash
 python get_file_information.py VJ103IMG --start 2020-07-01 --end 2020-07-10
 ```
 
-This will create files like:
-
-```
-INFOR/VJ103IMG/2020/2020-07-01.csv
-INFOR/VJ103IMG/2020/2020-07-02.csv
-...
-```
-
-Each CSV includes columns such as:
-
-```
-name, last_modified, size, mtime, cksum, md5sum, resourceType, downloadsLink
-```
+Output:  
+Creates `INFOR/VJ103IMG/2020/2020-07-01.csv` etc., each listing file `name`, `size`, `md5sum`, and `downloadsLink`.
 
 ---
 
 ### 2. Download missing or corrupted files
 
-The downloader reads each day’s INFOR CSV, checks your local files, and fetches any missing/bad ones:
-
 ```bash
-python download_missing.py VJ103IMG --start 2020-07-01 --end 2020-07-10
+python download_missing.py VJ103IMG --start 2020-07-01 --end 2020-07-10 --verify auto
 ```
 
-Files are saved by **year/DOY** under `data_root`, for example:
+Optional: Download into a clean staging directory instead of overwriting DATA_ROOT:
 
-'''
-/path/to/DATA/VJ103IMG/2020/183/   # for 2020-07-01 (DOY=183)
-/path/to/DATA/VJ103IMG/2020/184/   # for 2020-07-02
-'''
-
-Override integrity checking mode at the CLI if desired:
-
-'''bash
-# Fast, size-only check
-python download_missing.py VJ103IMG --start 2020-07-01 --end 2020-07-10 --verify size
-
-# Strict MD5 verification
-python download_missing.py VJ103IMG --start 2020-07-01 --end 2020-07-10 --verify md5
-'''
+```bash
+python download_missing.py VJ103IMG --start 2020-07-01 --end 2020-07-10 --verify auto --output_dir ./STAGING
+```
 
 ---
 
-## Command-Line Options
+### 3. Compare INFOR vs data_root and list missing files
 
-Typical arguments supported by the scripts:
+```bash
+python compare_infor_vs_data.py VJ103IMG --start 2020-07-01 --end 2020-07-10
+```
 
-'''
-get_file_information.py  PRODUCT  --start YYYY-MM-DD  [--end YYYY-MM-DD]  [--config config.yaml]
+Outputs:
+- Per-day CSVs in `missing/`
+- Summary CSV in `missing_summary.csv`
+- Missing files include full `downloadsLink`
 
-download_missing.py      PRODUCT  --start YYYY-MM-DD  [--end YYYY-MM-DD]
-                         [--config config.yaml]
-                         [--verify auto|md5|size|none]
-                         [--infor_root PATH] [--data_root PATH]
-                         [--token TOKEN]
-'''
+Optional output directory:
 
-**Precedence (lowest → highest):** 'config.yaml' < environment variables < command-line flags
+```bash
+python compare_infor_vs_data.py VJ103IMG --start 2020-07-01 --end 2020-07-10 --output_dir ./REPORTS
+```
+
+---
+
+### 4. Check theoretical missing overpasses (based on HHMM)
+
+```bash
+python check_missing_overpasses.py VJ103IMG --start 2020-07-01 --end 2020-07-10
+```
+
+For VIIRS (6-min granules) → max 240/day  
+For MODIS (5-min granules) → max 288/day
+
+Customize data_root and output name:
+
+```bash
+python check_missing_overpasses.py VJ103IMG --start 2020-07-01 --end 2020-07-10 \
+  --data_root /my/data/path --output my_viirs_report.csv
+```
 
 ---
 
-## Example Workflow
+### 5. Visualize monthly missing bars
 
-'''bash
-# Step 1: fetch metadata (INFOR CSVs)
-python get_file_information.py VNP14IMG --start 2020-01-01 --end 2020-01-05
+```bash
+python visualize_monthly_missing.py --product VJ103IMG --start 2020-01-01 --end 2020-12-31
+```
 
-# Step 2: download missing files (size check only for speed)
-python download_missing.py VNP14IMG --start 2020-01-01 --end 2020-01-05 --verify size
-'''
+Generates a `VJ103IMG_2020_missing_coverage.png` plot:
+
+- X-axis: days
+- Y-axis: file counts
+- Red bars = incomplete days
+- 4x3 subplots (1 per month)
+
+Optional output path:
+
+```bash
+python visualize_monthly_missing.py --product VJ103IMG --start 2020-01-01 --end 2020-12-31 --output_dir ./plots
+```
 
 ---
+
+## 📌 Notes
+
+- You can safely rerun download/check scripts; integrity will be verified before re-download.
+- INFOR CSVs are required for downloading and comparison.
+- `missing/` folder stores per-day missing summaries.
+
+---
+
+## 📁 Example INFOR CSV (header)
+
+```csv
+name,size,md5sum,downloadsLink
+VJ103IMG.A2020183.0000.001.nc,4052840,a7df3...,https://...
+VJ103IMG.A2020183.0006.001.nc,4038291,b421c...,https://...
+...
+```
+
+---
+
+## 📬 Contact
+
+Maintained by Meng Zhou (mzhou16@umbc.edu)
+
+```
 
 ## License
 
-MIT License (or add your preferred license)
+MIT License
 
 ---
 
@@ -164,3 +178,4 @@ MIT License (or add your preferred license)
 
 - NASA LAADS DAAC for data access  
 - Earthdata Login for authentication
+
