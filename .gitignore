@@ -3,6 +3,9 @@
 
 # Ignore the INFOR directory and its contents
 INFOR/
+REPORTS/
+TEMP_DOWNLOAD/
+test_infor/
 
 # Optional: other common ignores
 __pycache__/

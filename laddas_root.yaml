@@ -21,3 +21,7 @@ products:
   VJ203MOD: "https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/5201/VJ203MOD/"
   VJ202IMG: "https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/5201/VJ202IMG/"
   VJ203IMG: "https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/5201/VJ203IMG/"
+  MOD03: "https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/61/MOD03/"
+  MOD14: "https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/61/MOD14/"
+  MYD03: "https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/61/MYD03/"
+  MYD14: "https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/61/MYD14/"
